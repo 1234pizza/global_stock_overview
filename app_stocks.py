@@ -3,7 +3,6 @@ import time
 from datetime import datetime
 from data_source_stocks import DataSource 
 
-# Page Setup
 st.set_page_config(page_title="Global Market Overview", layout="wide")
 
 def color_values(val):
@@ -14,8 +13,8 @@ def color_values(val):
 
 def main():
     st.title("🌍 Consolidated Global Market Performance")
+    st.markdown("Overview: **1-Month** and **5-Day (Weekly)** totals with daily breakdown.")
     
-    # Init Data
     data_source = DataSource()
     
     # Sidebar
@@ -27,13 +26,12 @@ def main():
         st.rerun()
 
     # Fetching
-    with st.spinner("Downloading 30-day market data..."):
+    with st.spinner("Downloading monthly market data..."):
         df = data_source.get_all_stocks_data()
 
-    # Check if we have data
     if df is not None and not df.empty:
-        # Search functionality
-        search = st.text_input("🔍 Filter by Ticker or Index Name (e.g. SMI, AAPL, DAX)", "")
+        # Search Box
+        search = st.text_input("🔍 Search Ticker or Index", "")
         
         if search:
             mask = df['Ticker'].str.contains(search, case=False) | \
@@ -42,30 +40,23 @@ def main():
         else:
             df_display = df
 
-        # Last updated info
-        st.caption(f"Last sync: {datetime.now().strftime('%H:%M:%S')} | Data cached for 5 min.")
+        st.caption(f"Last sync: {datetime.now().strftime('%H:%M:%S')} | 5-minute cache active.")
 
-        # Formatting
-        # We color columns starting from index 2 (Total 30D %) to the end
-        try:
-            styled_df = df_display.style.map(color_values, subset=df_display.columns[2:]) \
-                                       .format(precision=2, na_rep="-")
-            
-            st.dataframe(
-                styled_df, 
-                use_container_width=True, 
-                height=800, 
-                hide_index=True
-            )
-        except Exception as e:
-            st.error(f"Display Error: {e}")
-            st.table(df_display.head(20)) # Fallback to standard table if dataframe fails
+        # Formatting: Color from column index 2 (Total 1M %) onwards
+        styled_df = df_display.style.map(color_values, subset=df_display.columns[2:]) \
+                                   .format(precision=2, na_rep="-")
+        
+        st.dataframe(
+            styled_df, 
+            use_container_width=True, 
+            height=800, 
+            hide_index=True
+        )
             
     else:
-        st.error("No data found. Markets may be closed or the API is currently throttled.")
-        st.info("Try clicking 'Clear Cache & Refresh' in the sidebar.")
+        st.error("No data found. Please check your connection or 'Clear Cache'.")
 
-    # Refresh
+    # Refresh Timer
     time.sleep(refresh_rate)
     st.rerun()
 
