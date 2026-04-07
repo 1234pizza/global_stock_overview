@@ -46,8 +46,8 @@ def main():
         df = data_source.get_data_for_index(idx_name)
 
         if not df.empty:
-            # Apply styling: Ticker column stays neutral, others get colored
-            styled_df = df.style.applymap(color_values, subset=df.columns[1:]) \
+            # Use .map instead of .applymap
+            styled_df = df.style.map(color_values, subset=df.columns[1:]) \
                                .format(precision=2, na_rep="-")
             
             st.dataframe(
