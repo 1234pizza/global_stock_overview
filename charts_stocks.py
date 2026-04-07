@@ -1,71 +1,49 @@
-import streamlit as st
-import time
-from datetime import datetime
-from data_source_stocks import DataSource  # Ensure this file contains the class you provided
+import yfinance as yf
+import pandas as pd
 
-# 1. Page Configuration
-st.set_page_config(
-    page_title="Global Market Performance", 
-    page_icon="📊", 
-    layout="wide"
-)
+class DataSource:
+    def __init__(self):
+        self.index_config = {
+            "SMI": {"tickers": ["ABBN.SW", "ALC.SW", "CFR.SW", "GEBN.SW", "GIVN.SW", "HOLN.SW", "KNIN.SW", "LOGN.SW", "LONN.SW", "NESN.SW", "NOVN.SW", "PGHN.SW", "ROG.SW", "SCMN.SW", "SIKA.SW", "SLHN.SW", "SOON.SW", "SREN.SW", "UBSG.SW", "ZURN.SW"], "suffix": ".SW"},
+            "DAX": {"tickers": ["ADS.DE", "AIR.DE", "ALV.DE", "BAS.DE", "BAYN.DE", "BMW.DE", "CON.DE", "DB1.DE", "DBK.DE", "DHL.DE", "DTE.DE", "EOAN.DE", "IFX.DE", "MBG.DE", "MUV2.DE", "SAP.DE", "SIE.DE", "VOW3.DE"], "suffix": ".DE"},
+            "SP500": {"tickers": ["AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "BRK-B", "TSLA", "V", "JPM"], "suffix": ""},
+            "NASDAQ": {"tickers": ["AAPL", "MSFT", "AMZN", "NVDA", "AVGO", "META", "ADBE", "COST", "PEP", "NFLX"], "suffix": ""}
+        }
 
-def color_values(val):
-    """Applies green color to positive values and red to negative."""
-    if isinstance(val, (int, float)):
-        color = 'green' if val > 0 else 'red' if val < 0 else 'grey'
-        return f'color: {color}; font-weight: bold;'
-    return ''
-
-def main():
-    # 2. Header and Title
-    st.title("📈 Global Index 7-Day Performance")
-    st.markdown("Daily percentage changes for the current session and the last 7 trading days.")
-    
-    # 3. Sidebar Controls
-    st.sidebar.header("Settings")
-    auto_refresh = st.sidebar.checkbox("Enable Auto Refresh", value=True)
-    refresh_interval = st.sidebar.slider("Update Every (sec)", 5, 60, 10)
-
-    # 4. Initialize Data Source
-    data_source = DataSource()
-    
-    # List of indices we want to display
-    indices = ["SMI", "DAX", "SP500", "NASDAQ"]
-    
-    # Show Last Update Time
-    current_time = datetime.now().strftime("%H:%M:%S")
-    st.info(f"Last data sync: {current_time}")
-
-    # 5. Display Loop for each Index
-    for idx_name in indices:
-        st.subheader(f"{idx_name} Stocks - Performance History")
-        
-        # Get data from your DataSource class
-        df = data_source.get_data_for_index(idx_name)
-
-        if not df.empty:
-            # Apply color coding to all columns except 'Ticker'
-            # We use .style to make it look professional
-            styled_df = df.style.applymap(color_values, subset=df.columns[1:]) \
-                               .format(precision=2, na_rep="-")
+    def get_data_for_index(self, index_name):
+        try:
+            config = self.index_config[index_name]
+            tickers = config["tickers"]
             
-            # Display the table
-            st.dataframe(
-                styled_df, 
-                use_container_width=True, 
-                height=450,
-                hide_index=True
-            )
-        else:
-            st.warning(f"No data currently available for {idx_name}.")
-        
-        st.markdown("---")
-
-    # 6. Auto-Refresh Logic
-    if auto_refresh:
-        time.sleep(refresh_interval)
-        st.rerun()
-
-if __name__ == "__main__":
-    main()
+            # Fetch data
+            data = yf.download(tickers, period="12d", interval="1d", group_by='ticker', progress=False)
+            
+            combined_results = []
+            for ticker in tickers:
+                # Get the Ticker Object to pull the company name
+                t_obj = yf.Ticker(ticker)
+                # Fallback to ticker symbol if name is not found
+                company_name = t_obj.info.get('longName', ticker)
+                
+                hist = data[ticker]['Close'].dropna()
+                
+                if len(hist) > 1:
+                    pct_changes = hist.pct_change() * 100
+                    
+                    stock_row = {
+                        'Ticker': ticker.replace(config["suffix"], ""),
+                        'Name': company_name,  # <--- Added Name
+                        'Today %': round(pct_changes.iloc[-1], 2)
+                    }
+                    
+                    for i in range(1, 8):
+                        if len(pct_changes) > i:
+                            val = pct_changes.iloc[-(i+1)]
+                            stock_row[f'Day -{i} (%)'] = round(val, 2)
+                    
+                    combined_results.append(stock_row)
+            
+            return pd.DataFrame(combined_results)
+        except Exception as e:
+            print(f"Error: {e}")
+            return pd.DataFrame()

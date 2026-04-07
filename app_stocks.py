@@ -1,9 +1,8 @@
 import streamlit as st
 import time
 from datetime import datetime
-from data_source_stocks import DataSource  # Ensure this filename matches your data source file
+from data_source_stocks import DataSource 
 
-# 1. Page Configuration
 st.set_page_config(
     page_title="Global Market Performance", 
     page_icon="📊", 
@@ -11,43 +10,33 @@ st.set_page_config(
 )
 
 def color_values(val):
-    """Applies green color to positive values and red to negative."""
     if isinstance(val, (int, float)):
-        if val > 0:
-            return 'color: #00ff00; font-weight: bold;'
-        elif val < 0:
-            return 'color: #ff4b4b; font-weight: bold;'
+        color = 'green' if val > 0 else 'red' if val < 0 else '#cccccc'
+        return f'color: {color}; font-weight: bold;'
     return ''
 
 def main():
-    # 2. Header and Title
     st.title("📈 Global Index 7-Day Performance")
-    st.markdown("Daily percentage changes for the current session and the last 7 trading days.")
+    st.markdown("Real-time percentage changes and 7-day history.")
     
-    # 3. Sidebar Controls
     st.sidebar.header("Settings")
     auto_refresh = st.sidebar.checkbox("Enable Auto Refresh", value=True)
     refresh_interval = st.sidebar.slider("Update Every (sec)", 5, 60, 10)
 
-    # 4. Initialize Data Source
     data_source = DataSource()
-    
-    # List of indices to display
     indices = ["SMI", "DAX", "SP500", "NASDAQ"]
     
-    # Show Last Update Time
     current_time = datetime.now().strftime("%H:%M:%S")
     st.info(f"Last data sync: {current_time}")
 
-    # 5. Display Tables
     for idx_name in indices:
-        st.subheader(f"{idx_name} Stocks - Performance History")
+        st.subheader(f"{idx_name} Stocks")
         
         df = data_source.get_data_for_index(idx_name)
 
         if not df.empty:
-            # Use .map instead of .applymap
-            styled_df = df.style.map(color_values, subset=df.columns[1:]) \
+            # subset=df.columns[2:] ensures we skip 'Ticker' and 'Name'
+            styled_df = df.style.map(color_values, subset=df.columns[2:]) \
                                .format(precision=2, na_rep="-")
             
             st.dataframe(
@@ -61,7 +50,6 @@ def main():
         
         st.markdown("---")
 
-    # 6. Refresh Logic
     if auto_refresh:
         time.sleep(refresh_interval)
         st.rerun()
