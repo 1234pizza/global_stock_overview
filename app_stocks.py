@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from datetime import datetime
-from data_source_smi import DataSource  # Ensure this filename matches your data source file
+from data_source_stocks import DataSource  # Ensure this filename matches your data source file
 
 # 1. Page Configuration
 st.set_page_config(
