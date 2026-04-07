@@ -13,55 +13,59 @@ class DataSource:
         }
 
     @st.cache_data(ttl=300)
-    def get_all_stocks_data(_self): # Added underscore to avoid streamlit hashing issues
+    def get_all_stocks_data(_self):
         try:
             all_tickers = []
             ticker_to_index = {}
-            
-            for index_name, tickers in _self.index_config.items():
+            for idx, tickers in _self.index_config.items():
                 for t in tickers:
                     if t not in all_tickers:
                         all_tickers.append(t)
-                        ticker_to_index[t] = index_name
+                        ticker_to_index[t] = idx
 
-            # Download data
-            data = yf.download(all_tickers, period="15d", interval="1d", group_by='ticker', progress=False)
+            # Download 35 days of data
+            data = yf.download(all_tickers, period="35d", interval="1d", group_by='ticker', progress=False)
             
             if data.empty:
                 return pd.DataFrame()
 
             combined_results = []
-            
             for ticker in all_tickers:
                 try:
-                    # SECURE ACCESS: Check if ticker exists in the columns before trying to slice
+                    # Check if ticker exists in columns
                     if ticker not in data.columns.get_level_values(0):
                         continue
-                        
-                    ticker_df = data[ticker].dropna()
                     
-                    if not ticker_df.empty and len(ticker_df) > 1:
-                        pct_changes = ticker_df['Close'].pct_change() * 100
-                        
-                        display_name = ticker.split('.')[0]
-                        
-                        row = {
-                            'Index': ticker_to_index[ticker],
-                            'Ticker': display_name,
-                            'Today %': round(pct_changes.iloc[-1], 2)
-                        }
-                        
-                        # Get 7 history days
-                        for i in range(1, 8):
-                            if len(pct_changes) > i:
-                                row[f'Day -{i} (%)'] = round(pct_changes.iloc[-(i+1)], 2)
-                        
-                        combined_results.append(row)
-                except Exception:
-                    continue # Skip individual errors to keep the app running
+                    df_t = data[ticker].dropna()
+                    if len(df_t) < 10: 
+                        continue
+
+                    close = df_t['Close']
+                    
+                    # Calculations
+                    today_pct = ((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2]) * 100
+                    total_7d = ((close.iloc[-1] - close.iloc[-8]) / close.iloc[-8]) * 100
+                    total_30d = ((close.iloc[-1] - close.iloc[0]) / close.iloc[0]) * 100
+
+                    row = {
+                        'Index': ticker_to_index[ticker],
+                        'Ticker': ticker.split('.')[0],
+                        'Total 30D %': round(total_30d, 2),
+                        'Total 7D %': round(total_7d, 2),
+                        'Today %': round(today_pct, 2)
+                    }
+
+                    # Add Last 7 Days history
+                    for i in range(1, 8):
+                        # % change from previous day
+                        val = ((close.iloc[-i] - close.iloc[-(i+1)]) / close.iloc[-(i+1)]) * 100
+                        row[f'Day -{i} (%)'] = round(val, 2)
+                    
+                    combined_results.append(row)
+                except:
+                    continue
 
             return pd.DataFrame(combined_results)
         except Exception as e:
-            # This helps debug without crashing the whole app
-            st.error(f"Data Fetching Error: {str(e)}")
+            st.error(f"Data Source Error: {e}")
             return pd.DataFrame()

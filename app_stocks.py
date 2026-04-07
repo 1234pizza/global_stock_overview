@@ -3,63 +3,71 @@ import time
 from datetime import datetime
 from data_source_stocks import DataSource 
 
-# 1. Page Configuration
-st.set_page_config(
-    page_title="Global Market Monitor", 
-    page_icon="📈", 
-    layout="wide"
-)
+# Page Setup
+st.set_page_config(page_title="Global Market Overview", layout="wide")
 
 def color_values(val):
-    """Applies green for gains and red for losses."""
     if isinstance(val, (int, float)):
-        if val > 0:
-            return 'color: #00CC00; font-weight: bold;'
-        elif val < 0:
-            return 'color: #FF4B4B; font-weight: bold;'
+        if val > 0: return 'color: #00CC00; font-weight: bold;'
+        if val < 0: return 'color: #FF4B4B; font-weight: bold;'
     return ''
 
 def main():
-    # 2. Header and Title
-    st.title("🌍 Global Stock Performance (Consolidated)")
-    st.markdown("""
-        This view combines **SMI, DAX, S&P 500, and NASDAQ**. 
-        Includes **30-Day/7-Day Overviews** and daily percentage changes.
-    """)
+    st.title("🌍 Consolidated Global Market Performance")
     
-    # 3. Sidebar Controls
-    st.sidebar.header("Dashboard Settings")
-    refresh_rate = st.sidebar.slider("Auto-Refresh Interval (sec)", 60, 600, 300)
+    # Init Data
+    data_source = DataSource()
     
-    if st.sidebar.button("🔄 Force Refresh Now"):
+    # Sidebar
+    st.sidebar.header("Controls")
+    refresh_rate = st.sidebar.slider("Refresh rate (sec)", 60, 600, 300)
+    
+    if st.sidebar.button("Clear Cache & Refresh"):
         st.cache_data.clear()
         st.rerun()
 
-    # Initialize Data Source
-    data_source = DataSource()
-    
-    # 4. Data Fetching
-    with st.spinner("Syncing global market data (30-day window)..."):
+    # Fetching
+    with st.spinner("Downloading 30-day market data..."):
         df = data_source.get_all_stocks_data()
 
-    # 5. Display Logic
+    # Check if we have data
     if df is not None and not df.empty:
-        # Status Info
-        current_time = datetime.now().strftime("%H:%M:%S")
-        st.sidebar.success(f"Last Sync: {current_time}")
-        st.sidebar.info("Note: Data is cached for 5 minutes to prevent API throttling.")
-
-        # Search / Filter Bar
-        search_query = st.text_input("🔍 Search by Ticker or Index (e.g., 'UBS', 'AAPL', or 'DAX')", "")
+        # Search functionality
+        search = st.text_input("🔍 Filter by Ticker or Index Name (e.g. SMI, AAPL, DAX)", "")
         
-        if search_query:
-            # Filter the dataframe based on Ticker or Index columns
-            mask = (df['Ticker'].str.contains(search_query, case=False)) | \
-                   (df['Index'].str.contains(search_query, case=False))
-            display_df = df[mask]
+        if search:
+            mask = df['Ticker'].str.contains(search, case=False) | \
+                   df['Index'].str.contains(search, case=False)
+            df_display = df[mask]
         else:
-            display_df = df
+            df_display = df
 
-        # 6. Table Styling
-        # We start coloring from the 3rd column (index 2) onwards: 
-        # (Total 30D, Total 7D, Today, Day -1, etc.)
+        # Last updated info
+        st.caption(f"Last sync: {datetime.now().strftime('%H:%M:%S')} | Data cached for 5 min.")
+
+        # Formatting
+        # We color columns starting from index 2 (Total 30D %) to the end
+        try:
+            styled_df = df_display.style.map(color_values, subset=df_display.columns[2:]) \
+                                       .format(precision=2, na_rep="-")
+            
+            st.dataframe(
+                styled_df, 
+                use_container_width=True, 
+                height=800, 
+                hide_index=True
+            )
+        except Exception as e:
+            st.error(f"Display Error: {e}")
+            st.table(df_display.head(20)) # Fallback to standard table if dataframe fails
+            
+    else:
+        st.error("No data found. Markets may be closed or the API is currently throttled.")
+        st.info("Try clicking 'Clear Cache & Refresh' in the sidebar.")
+
+    # Refresh
+    time.sleep(refresh_rate)
+    st.rerun()
+
+if __name__ == "__main__":
+    main()
