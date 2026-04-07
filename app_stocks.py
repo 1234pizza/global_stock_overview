@@ -1,97 +1,70 @@
-import streamlit as st  # Web app framework
-import time  # For creating delays
-from datetime import datetime  # For working with time
-from data_source_stocks import DataSource  # Our data getting class
-from charts_stocks import ChartCreator  # Our chart creating class
+import streamlit as st
+import time
+from datetime import datetime
+from data_source_smi import DataSource  # Ensure this filename matches your data source file
 
-# Configure our web page
+# 1. Page Configuration
 st.set_page_config(
-    page_title="Global Market Dashboard", 
-    page_icon="📈", 
-    layout="wide", 
-    initial_sidebar_state="expanded"
+    page_title="Global Market Performance", 
+    page_icon="📊", 
+    layout="wide"
 )
 
+def color_values(val):
+    """Applies green color to positive values and red to negative."""
+    if isinstance(val, (int, float)):
+        if val > 0:
+            return 'color: #00ff00; font-weight: bold;'
+        elif val < 0:
+            return 'color: #ff4b4b; font-weight: bold;'
+    return ''
+
 def main():
-    """Main function that runs our Multi-Index dashboard"""
+    # 2. Header and Title
+    st.title("📈 Global Index 7-Day Performance")
+    st.markdown("Daily percentage changes for the current session and the last 7 trading days.")
+    
+    # 3. Sidebar Controls
+    st.sidebar.header("Settings")
+    auto_refresh = st.sidebar.checkbox("Enable Auto Refresh", value=True)
+    refresh_interval = st.sidebar.slider("Update Every (sec)", 5, 60, 10)
 
-    # 1. Page Setup
-    st.title("🌍 Global Market Indices Live")
-    st.markdown("Real-time tracking of SMI, DAX, S&P 500, and NASDAQ 100.")
-    st.markdown("---")
-
-    # 2. Sidebar Controls
-    st.sidebar.header("Dashboard Settings")
-    auto_refresh = st.sidebar.checkbox(
-        "Enable Auto Refresh",
-        value=True,
-        help="Automatically update stock data every few seconds"
-    )
-
-    refresh_interval = st.sidebar.slider(
-        "Update Every (seconds)",
-        min_value=5,
-        max_value=60,
-        value=10
-    )
-
-    # 3. Initialize Classes
+    # 4. Initialize Data Source
     data_source = DataSource()
-    chart_creator = ChartCreator()
-
-    # 4. Content Containers
-    status_container = st.empty()
     
-    # We create a dictionary of containers for each index
-    indices = {
-        "SMI": {"title": "🇨🇭 Swiss Market Index (SMI)", "icon": "CHF"},
-        "DAX": {"title": "🇩🇪 German Stock Index (DAX)", "icon": "EUR"},
-        "SP500": {"title": "🇺🇸 S&P 500", "icon": "USD"},
-        "NASDAQ": {"title": "🇺🇸 NASDAQ 100", "icon": "USD"}
-    }
+    # List of indices to display
+    indices = ["SMI", "DAX", "SP500", "NASDAQ"]
     
-    # Pre-create UI containers to prevent jumping
-    containers = {key: st.container() for key in indices.keys()}
+    # Show Last Update Time
+    current_time = datetime.now().strftime("%H:%M:%S")
+    st.info(f"Last data sync: {current_time}")
 
-    update_count = 0
+    # 5. Display Tables
+    for idx_name in indices:
+        st.subheader(f"{idx_name} Stocks - Performance History")
+        
+        df = data_source.get_data_for_index(idx_name)
 
-    # 5. The Live Update Loop
-    while True:
-        update_count += 1
-        current_time = datetime.now().strftime("%H:%M:%S")
-        status_container.info(f"Last updated: {current_time} (Update #{update_count})")
-
-        # Loop through each index and update its specific section
-        for key, info in indices.items():
-            with containers[key]:
-                st.header(info["title"])
-                
-                # Logic assumes your data_source can take an index name
-                # If your methods are hardcoded for SMI, you'll need to update data_source.py
-                data = data_source.get_data_for_index(key) 
-
-                if not data.empty:
-                    # Create metrics and charts specifically for this index
-                    chart_creator.create_summary_metrics(data)
-                    
-                    st.subheader(f"{key} Performance ({info['icon']})")
-                    fig = chart_creator.create_index_chart(data, key)
-                    st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart_{update_count}")
-                    
-                    with st.expander(f"View {key} Raw Data"):
-                        st.dataframe(data, use_container_width=True)
-                else:
-                    st.warning(f"Waiting for {key} data...")
-                
-                st.markdown("---")
-
-        # 6. Loop Logic
-        if not auto_refresh:
-            break
+        if not df.empty:
+            # Apply styling: Ticker column stays neutral, others get colored
+            styled_df = df.style.applymap(color_values, subset=df.columns[1:]) \
+                               .format(precision=2, na_rep="-")
             
+            st.dataframe(
+                styled_df, 
+                use_container_width=True, 
+                height=450,
+                hide_index=True
+            )
+        else:
+            st.warning(f"No data currently available for {idx_name}.")
+        
+        st.markdown("---")
+
+    # 6. Refresh Logic
+    if auto_refresh:
         time.sleep(refresh_interval)
-        if auto_refresh:
-            st.rerun()
+        st.rerun()
 
 if __name__ == "__main__":
     main()
