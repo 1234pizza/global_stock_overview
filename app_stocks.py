@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 from data_source_stocks import DataSource 
 
-st.set_page_config(page_title="Global Market Overview", layout="wide")
+st.set_page_config(page_title="Market Overview", layout="wide")
 
 def color_values(val):
     if isinstance(val, (int, float)):
@@ -12,43 +12,36 @@ def color_values(val):
     return ''
 
 def main():
-    st.title("🌍 Consolidated Global Stock Performance")
-    st.markdown("All stocks from SMI, DAX, S&P 500, and NASDAQ in a single view.")
+    st.title("🌍 Global Stock Performance (Consolidated)")
     
+    # Initialize outside the loop
     data_source = DataSource()
     
-    # Sidebar Info
-    st.sidebar.header("Status")
-    refresh_rate = st.sidebar.slider("Refresh Interval (sec)", 60, 600, 300)
-    current_time = datetime.now().strftime("%H:%M:%S")
-    st.sidebar.write(f"**Last Sync:** {current_time}")
-
-    # Fetch Consolidated Data
-    with st.spinner("Downloading all market data..."):
+    # Sidebar
+    st.sidebar.header("Control Panel")
+    refresh_rate = st.sidebar.slider("Auto-Refresh (sec)", 60, 600, 300)
+    
+    with st.spinner("Syncing with Global Markets..."):
+        # Call the new consolidated method
         df = data_source.get_all_stocks_data()
 
-    if not df.empty:
-        # Search/Filter functionality (very useful for one big list)
-        search_query = st.text_input("🔍 Search for a Ticker or Index (e.g., 'SMI' or 'AAPL')")
-        if search_query:
-            df = df[df.apply(lambda row: search_query.upper() in row.astype(str).get('Ticker', '').upper() or 
-                                        search_query.upper() in row.astype(str).get('Index', '').upper(), axis=1)]
+    if df is not None and not df.empty:
+        # Search Box
+        search = st.text_input("🔍 Search Ticker or Index", "")
+        if search:
+            mask = df['Ticker'].str.contains(search, case=False) | df['Index'].str.contains(search, case=False)
+            df_display = df[mask]
+        else:
+            df_display = df
 
-        # Apply styling to all percentage columns (Today % and Day -1 to -7)
-        # These start from the 3rd column (index 2) onwards
-        styled_df = df.style.map(color_values, subset=df.columns[2:]) \
-                           .format(precision=2, na_rep="-")
+        # Styling
+        styled_df = df_display.style.map(color_values, subset=df_display.columns[2:]) \
+                                   .format(precision=2, na_rep="-")
         
-        st.dataframe(
-            styled_df, 
-            use_container_width=True, 
-            height=800, # Taller height for the big list
-            hide_index=True
-        )
+        st.dataframe(styled_df, use_container_width=True, height=800, hide_index=True)
     else:
-        st.error("Could not retrieve data. Please check your connection.")
+        st.warning("No data retrieved. Yahoo Finance might be throttled or markets are closed.")
 
-    # Refresh timer
     time.sleep(refresh_rate)
     st.rerun()
 
